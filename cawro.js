@@ -214,6 +214,11 @@ cw_Car.prototype.kill = function() {
 cw_Car.prototype.checkDeath = function() {
   // check health
   var position = this.getPosition();
+  // check if car reached end of the path
+  if(position.x > world.finishLine) {
+      this.healthBar.width = "0";
+      return true;
+  }
   if(position.y > this.maxPositiony) {
     this.maxPositiony = position.y;
   }
@@ -688,7 +693,12 @@ function toggleDisplay() {
   if(doDraw) {
     doDraw = false;
     cw_stopSimulation();
-    cw_runningInterval = setInterval(simulationStep, 1); // simulate 1000x per second when not drawing
+    cw_runningInterval = setInterval(function() {
+      var time = performance.now() + (1000 / screenfps);
+      while (time > performance.now()) {
+        simulationStep();
+      }
+    }, 1);
   } else {
     doDraw = true;
     clearInterval(cw_runningInterval);
@@ -761,6 +771,45 @@ function cw_drawMiniMap() {
 /* ==== END Drawing ======================================================== */
 /* ========================================================================= */
 
+function saveProgress() {
+  localStorage.cw_savedGeneration = JSON.stringify(cw_carGeneration);
+  localStorage.cw_genCounter = gen_counter;
+  localStorage.cw_ghost = JSON.stringify(ghost);
+  localStorage.cw_topScores = JSON.stringify(cw_topScores);
+  localStorage.cw_floorSeed = floorseed;
+}
+
+function restoreProgress() {
+  if(typeof localStorage.cw_savedGeneration == 'undefined' || localStorage.cw_savedGeneration == null) {
+    alert("No saved progress found");
+    return;
+  }
+  cw_stopSimulation();
+  cw_carGeneration = JSON.parse(localStorage.cw_savedGeneration);
+  gen_counter = localStorage.cw_genCounter;
+  ghost = JSON.parse(localStorage.cw_ghost);
+  cw_topScores = JSON.parse(localStorage.cw_topScores);
+  floorseed = localStorage.cw_floorSeed;
+  document.getElementById("newseed").value = floorseed;
+
+  for (b = world.m_bodyList; b; b = b.m_next) {
+    world.DestroyBody(b);
+  }
+  Math.seedrandom(floorseed);
+  cw_createFloor();
+  cw_drawMiniMap();
+  Math.seedrandom();
+
+  cw_materializeGeneration();
+  cw_deadCars = 0;
+  leaderPosition = new Object();
+  leaderPosition.x = 0;
+  leaderPosition.y = 0;
+  document.getElementById("generation").innerHTML = "generation "+gen_counter;
+  document.getElementById("cars").innerHTML = "";
+  document.getElementById("population").innerHTML = "cars alive: "+generationSize;
+  cw_startSimulation();
+}
 
 function simulationStep() {
   world.Step(1/box2dfps, 20, 20);
@@ -814,7 +863,7 @@ function cw_newRound() {
   if (mutable_floor) {
     // GHOST DISABLED
     ghost = null;
-    floorseed = Math.seedrandom();
+    floorseed = btoa(Math.seedrandom());
 
     world = new b2World(gravity, doSleep);
     cw_createFloor();
@@ -968,7 +1017,7 @@ function cw_init() {
   }
   mmm.parentNode.removeChild(mmm);
   hbar.parentNode.removeChild(hbar);
-  floorseed = Math.seedrandom();
+  floorseed = btoa(Math.seedrandom());
   world = new b2World(gravity, doSleep);
   cw_createFloor();
   cw_drawMiniMap();
